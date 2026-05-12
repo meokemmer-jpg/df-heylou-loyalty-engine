@@ -1,0 +1,109 @@
+# DF-HeyLou-Loyalty-Engine Configuration [CRUX-MK]
+df_id: DF-HEYLOU-LOYALTY
+df_name: heylou-loyalty-engine
+version: 0.1.0-SKELETON
+status: PRE-PRODUCTION-CONDITIONAL
+crux-mk: true
+
+k0_touch: true  # Loyalty-Punkte = Quasi-Waehrung, K_0-relevant
+k0_caveats:
+  - "Loyalty-Punkte sind redeemable (Discount-Liability)"
+  - "Tier-Aenderungen wirken auf Brand-Perception"
+phronesis_required: true
+sandbox_default: true
+
+description: |
+  Hotel-Loyalty-Programm fuer Direct-Booking-Wiederkehr.
+  Punkte-System mit Tiers Bronze/Silver/Gold + Personalization.
+
+tier_2_check:
+  lambda_per_month_estimate: 200  # bookings * loyalty-updates
+  narrow_scope: "Loyalty Punkte + Tiers + Personalization + Rewards"
+  determinism: 0.95  # Punkte-Logic deterministisch
+  rollback_seconds: 30
+  test_coverage_target: 0.85
+  k0_protected: false
+  q0_measurable: true
+  escalation_after_n_fails: 3
+  rho_budget_eur_day: 0
+  audit_trail: branch-hub/audit/df-heylou-loyalty.jsonl
+
+k11_cascade_containment:
+  cascade_isolation: hard
+  failure_blast_radius: 0
+  dependency_dlq_strategy: "Per-Guest DLQ"
+
+k12_distillation_resistenz:
+  output_feeds_into_training: false
+  provenance_required_in_output: true
+  non_llm_validation_layer: deterministic-points-arithmetic
+  pii_scrubbing_enabled: true  # Guest-Daten DSGVO
+
+k13_independent_ground_truth:
+  external_anchor_type: external_api_source  # Booking-Engine als Ground-Truth
+  external_anchor_validation_frequency: "per Loyalty-Update"
+  pre_action_domain_check:
+    env_tag: "dev/staging/prod"
+    mount_point: "branch-hub Path"
+    network_region: "n/a (local-state)"
+  pre_action_backup_check:
+    backup_status: "previous loyalty-state persistent"
+    replication_lag: "n/a"
+  pre_action_blast_radius_check:
+    blast_radius: "1 Guest pro Update"
+    reversibility_class: "state-only (Punkte sind reversibel)"
+
+k14_human_override_decay:
+  override_complexity: single_command
+  override_documentation_freshness_days: 30
+  martin_review_cadence: "monthly Loyalty-KPI-Review"
+  bus_factor_handover_drilled: false
+
+k15_entropy_budget:
+  entropy_added_loc_estimate: 700
+  entropy_added_concepts:
+    - LoyaltyTier
+    - LoyaltyAccount
+    - PersonalizationPreference
+    - RewardItem
+  entropy_justified_by_rho: "+EUR 5-15k/J Year-1, +EUR 50-150k/J Year-3"
+  entropy_subtractive_potential: "Ersetzt extern-Loyalty-Provider"
+
+k16_concurrent_spawn_mutex:
+  concurrent_spawn_protection: both
+  lock_dir: /tmp/df-heylou-loyalty.lock
+  lock_stale_age_h: 6
+  engine_pgrep_check: true
+  lock_release_on: EXIT_INT_TERM
+
+lose_coupling:
+  LC1_graceful_degradation:
+    degradation_modes:
+      - full
+      - degraded_personalization
+      - standalone
+    degradation_test_required: true
+  LC2_direct_mode:
+    direct_mode_available: true
+    direct_mode_capability: 0.80
+    direct_mode_trigger: "Personalization-API unreachable >30s"
+  LC3_circuit_breaker:
+    circuit_breaker_timeout_s: 30
+    circuit_breaker_open_threshold: 3
+    circuit_breaker_half_open_test_interval_s: 300
+  LC4_failure_isolation:
+    state_externalization: true
+    idempotent_operations: true
+    dependency_dlq_separate: true
+  LC5_health_check:
+    health_check_dependencies: []
+    health_check_degraded_score: 0.7
+    health_check_endpoint_or_file: "branch-hub/state/df-heylou-loyalty-health.json"
+
+env_vars:
+  DF_HEYLOU_LOYALTY_REAL_ENABLED:
+    default: false
+  PHRONESIS_TICKET:
+    required_for_real: true
+
+[CRUX-MK]
