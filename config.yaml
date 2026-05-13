@@ -5,6 +5,21 @@ version: 0.1.0-SKELETON
 status: PRE-PRODUCTION-CONDITIONAL
 crux-mk: true
 
+default_action:
+  description: "Loyalty-Punkte Berechnen + Tier-Updates (Bronze/Silver/Gold) + Personalization-Preferences fuer wiederkehrende Direct-Booking-Gaeste"
+  rho_per_run_eur: 120
+  rho_validation_source: unvalidated
+  block_gates:
+    - gate_id: K13_PAV
+      block_reason: "Pre-Action-Verification Pflicht (PocketOS-Lehre): env_tag + pii_scrubbing + Loyalty-Punkte sind redeemable (K_0-Liability)"
+      false_block_cost_eur: 90
+      legitimate_block_condition: "DSGVO-Pflicht-PII-Scrubbing fehlt ODER Production-Loyalty-Mode ohne PHRONESIS_TICKET ODER Discount-Liability ungeklärt"
+    - gate_id: K16
+      block_reason: "Concurrent-Spawn auf gleicher Loyalty-Account-OUT_DIR verhindert (Lock-File /tmp/df-heylou-loyalty.lock)"
+      false_block_cost_eur: 50
+      legitimate_block_condition: "Lock-File jünger als 6h existiert + andere Engine-PID via pgrep detected"
+  graceful_degradation_path: "Personalization-API-Fallback auf static-tier-policy (Bronze=5%, Silver=10%, Gold=15%) ohne ML-Preferences"
+
 k0_touch: true  # Loyalty-Punkte = Quasi-Waehrung, K_0-relevant
 k0_caveats:
   - "Loyalty-Punkte sind redeemable (Discount-Liability)"
