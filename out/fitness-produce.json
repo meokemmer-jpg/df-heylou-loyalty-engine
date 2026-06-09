@@ -1,9 +1,9 @@
 {
   "df": "df-heylou-loyalty-engine",
-  "ts": "2026-06-07T19:25:17.992523+00:00",
+  "ts": "2026-06-09T01:17:58.357134+00:00",
   "ok": true,
-  "bytes": 4912,
-  "model": "kemmer-70b-ctx8k",
+  "bytes": 5722,
+  "model": "kemmer-14b-ctx8k",
   "mode": "produce",
-  "duration_s": 152.5
+  "duration_s": 42.7
 }
