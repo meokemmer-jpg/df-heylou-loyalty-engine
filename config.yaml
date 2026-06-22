@@ -122,3 +122,8 @@ env_vars:
     required_for_real: true
 
 [CRUX-MK]
+K13_external_anchor_type: verified_web_sources
+K13_external_anchor_validation_frequency: per_anchor_run
+K13_external_anchor_count: 2
+K13_external_anchor_evidence: https://www.destatis.de/DE/Themen/Branchen-Unternehmen/Gastgewerbe-Tourismus/_inhalt.html`
+K13_anchored_ts: 2026-06-22T05:54:38.974544+00:00
