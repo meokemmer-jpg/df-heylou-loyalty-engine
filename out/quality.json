@@ -1,9 +1,9 @@
 {
   "df": "df-heylou-loyalty-engine",
-  "ts": "2026-07-03T02:53:52.817862+00:00",
+  "ts": "2026-07-04T01:50:44.992182+00:00",
   "maturity": "TESTED",
   "maturity_level": 4,
   "evidence_grade": 4,
-  "wargame_verdict": "CONDITIONAL",
+  "wargame_verdict": null,
   "crux": "[CRUX-MK]"
 }
