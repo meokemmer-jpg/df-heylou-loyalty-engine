@@ -1,0 +1,5 @@
+{
+  "verdict": "HOLLOW",
+  "reason": "Der Personalization-Teil prueft nur einen hart erwarteten Gewinner (DELUXE) und keinen Gegenfall wie STANDARD als haeufigster Raumtyp oder unbekannten Gast, sodass eine konstante DELUXE-Empfehlung bestehen koennte.",
+  "ts": "2026-08-07T14:54:29.503468+00:00"
+}
