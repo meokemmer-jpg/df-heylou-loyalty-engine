@@ -1,5 +1,6 @@
 {
-  "verdict": "HOLLOW",
-  "reason": "Der Personalization-Teil prueft nur einen hart erwarteten Gewinner (DELUXE) und keinen Gegenfall wie STANDARD als haeufigster Raumtyp oder unbekannten Gast, sodass eine konstante DELUXE-Empfehlung bestehen koennte.",
-  "ts": "2026-08-07T14:54:29.503468+00:00"
+  "verdict": "HOLDS",
+  "reason": "Test 13 schreibt echte SQLite-Historien fuer zwei Gaeste mit gegensaetzlicher Zimmerpraeferenz, prueft unterschiedliche Empfehlungen und verifiziert diese nach Reopen persistent.",
+  "ts": "2026-08-08T17:29:56.908762+00:00",
+  "attempts": 1
 }

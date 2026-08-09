@@ -18,37 +18,76 @@ def k12_provenance(p, k=b'df-aggr'):
     return {'h': hashlib.sha256(p).hexdigest(), 'm': hmac.new(k,p,hashlib.sha256).hexdigest()}
 """Personalization-Engine [CRUX-MK].
 
-Per-Guest-Preference-Optimization basierend auf Booking-Historie.
+Per-Guest-Preference-Optimization basierend auf persistierter Booking-Historie.
 
-DSGVO-Schutz: nur aggregierte Preferences, kein PII.
+DSGVO-Schutz: nur gehashte Guest-IDs, keine PII im Speicher- oder DB-Schema.
 
 [CRUX-MK]
 """
 
 
 import hashlib
-from collections import Counter
+import sqlite3
+import tempfile
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
 
 
 @dataclass
 class GuestPreference:
     """Aggregierte Preferences pro Guest (hashed-id)."""
     guest_id_hash: str
-    preferred_room_types: dict[str, int] = field(default_factory=dict)  # room_type -> count
+    preferred_room_types: dict[str, int] = field(default_factory=dict)
     preferred_durations: list[int] = field(default_factory=list)
     avg_booking_value_eur: float = 0.0
     n_bookings: int = 0
 
 
 class PersonalizationEngine:
-    """Aggregiert Guest-Preferences."""
+    """Persistiert Booking-Events und leitet Guest-Preferences daraus ab."""
 
-    def __init__(self):
-        self._preferences: dict[str, GuestPreference] = {}
+    def __init__(self, db_path: Optional[str | Path] = None):
+        if db_path is None:
+            handle = tempfile.NamedTemporaryFile(
+                prefix="df-heylou-loyalty-personalization-", suffix=".sqlite3", delete=False
+            )
+            handle.close()
+            self.db_path = Path(handle.name)
+        else:
+            self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db = sqlite3.connect(self.db_path)
+        self._db.row_factory = sqlite3.Row
+        self._init_schema()
+
+    def close(self) -> None:
+        self._db.close()
+
+    def _init_schema(self) -> None:
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS booking_preferences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guest_id_hash TEXT NOT NULL,
+                room_type TEXT NOT NULL,
+                duration_nights INTEGER NOT NULL CHECK(duration_nights > 0),
+                amount_eur REAL NOT NULL CHECK(amount_eur >= 0),
+                recorded_at REAL NOT NULL
+            )
+            """
+        )
+        self._db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_booking_preferences_guest_room
+            ON booking_preferences (guest_id_hash, room_type)
+            """
+        )
+        self._db.commit()
 
     def _hash_guest(self, guest_email: str) -> str:
-        return hashlib.sha256(guest_email.encode()).hexdigest()[:32]
+        return hashlib.sha256(guest_email.strip().lower().encode()).hexdigest()[:32]
 
     def record_booking_preference(
         self,
@@ -57,26 +96,69 @@ class PersonalizationEngine:
         duration_nights: int,
         amount_eur: float,
     ) -> GuestPreference:
-        """Booking-Preference aggregieren."""
+        """Booking-Preference als reales Event persistieren und Aggregat zurueckgeben."""
+        normalized_room_type = room_type.strip().upper()
+        if not guest_email or "@" not in guest_email:
+            raise ValueError("Invalid guest email")
+        if not normalized_room_type:
+            raise ValueError("Invalid room type")
         if duration_nights <= 0 or amount_eur < 0:
             raise ValueError("Invalid preference data")
-        guest_id = self._hash_guest(guest_email)
-        p = self._preferences.get(guest_id) or GuestPreference(guest_id_hash=guest_id)
 
-        p.preferred_room_types[room_type] = p.preferred_room_types.get(room_type, 0) + 1
-        p.preferred_durations.append(duration_nights)
-        # Running average
-        p.avg_booking_value_eur = (
-            (p.avg_booking_value_eur * p.n_bookings + amount_eur) / (p.n_bookings + 1)
-        )
-        p.n_bookings += 1
-        self._preferences[guest_id] = p
-        return p
+        guest_id = self._hash_guest(guest_email)
+        with self._db:
+            self._db.execute(
+                """
+                INSERT INTO booking_preferences (
+                    guest_id_hash, room_type, duration_nights, amount_eur, recorded_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (guest_id, normalized_room_type, int(duration_nights), float(amount_eur), time.time()),
+            )
+        return self.get_preference(guest_email)
+
+    def get_preference(self, guest_email: str) -> GuestPreference:
+        guest_id = self._hash_guest(guest_email)
+        rows = self._db.execute(
+            """
+            SELECT room_type, duration_nights, amount_eur
+            FROM booking_preferences
+            WHERE guest_id_hash = ?
+            ORDER BY id ASC
+            """,
+            (guest_id,),
+        ).fetchall()
+
+        preference = GuestPreference(guest_id_hash=guest_id)
+        total_value = 0.0
+        for row in rows:
+            room_type = row["room_type"]
+            preference.preferred_room_types[room_type] = (
+                preference.preferred_room_types.get(room_type, 0) + 1
+            )
+            preference.preferred_durations.append(int(row["duration_nights"]))
+            total_value += float(row["amount_eur"])
+
+        preference.n_bookings = len(rows)
+        if preference.n_bookings:
+            preference.avg_booking_value_eur = total_value / preference.n_bookings
+        return preference
 
     def recommend_room_type(self, guest_email: str) -> str | None:
-        """Recommend most-frequent room-type."""
+        """Recommend most-frequent room-type, deterministisch mit Revenue-Tie-Break."""
         guest_id = self._hash_guest(guest_email)
-        p = self._preferences.get(guest_id)
-        if not p or not p.preferred_room_types:
+        row = self._db.execute(
+            """
+            SELECT room_type, COUNT(*) AS bookings, SUM(amount_eur) AS revenue
+            FROM booking_preferences
+            WHERE guest_id_hash = ?
+            GROUP BY room_type
+            ORDER BY bookings DESC, revenue DESC, room_type ASC
+            LIMIT 1
+            """,
+            (guest_id,),
+        ).fetchone()
+        if row is None:
             return None
-        return Counter(p.preferred_room_types).most_common(1)[0][0]
+        return str(row["room_type"])
